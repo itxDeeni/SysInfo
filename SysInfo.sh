@@ -15,7 +15,7 @@
 #   -c, --check           Check required dependencies and exit
 #
 # License: MIT (https://opensource.org/licenses/MIT)
-# Repository: https://github.com/yourusername/Systeminfo
+# Repository: https://github.com/itxdeeni/Systeminfo
 
 set -o pipefail
 set -Euo pipefail
@@ -117,35 +117,41 @@ json_escape() {
   printf "%s" "$s"
 }
 
+NL=$'\n'
+
 json_write() {
   [[ "$JSON_MODE" != "1" ]] && return
-  printf "%b" "$1"
+  printf "%s" "$1"
 }
 
-json_obj_start()   { json_write '{\n'; }
-json_obj_end()     { json_write '\n}\n'; }
+json_obj_start()   { json_write "{${NL}"; }
+json_obj_end()     { json_write "}${NL}"; }
 
 json_kv() {
   local key="$1" val="$2"
-  json_write "  \"$(json_escape "$key")\": \"$(json_escape "$val")\",\n"
+  json_write "  \"$(json_escape "$key")\": \"$(json_escape "$val")\",${NL}"
 }
 
-json_sec_start() { json_write "  \"$(json_escape "$1")\": {\n"; }
-json_sec_end()   { json_write "  },\n"; }
+json_sec_start() { json_write "  \"$(json_escape "$1")\": {${NL}"; }
+json_sec_end()   { json_write "  },${NL}"; }
 
 json_array_start() {
   local name="$1"
-  json_write "  \"$(json_escape "$name")\": [\n"
+  json_write "  \"$(json_escape "$name")\": [${NL}"
 }
 json_array_append() {
   local val="$1"
-  json_write "  \"$(json_escape "$val")\",\n"
+  json_write "  \"$(json_escape "$val")\",${NL}"
 }
 json_array_end() {
-  json_write "  ]\n"
+  json_write "  ]${NL}"
 }
 
-json_finish() { perl -0777 -pe 's/,\n(\s*})/\n$1/g' 2>/dev/null || sed -z 's/,\n}/\n}/g'; }
+json_finish() {
+  perl -0777 -pe 's/,\n(\s*})/\n$1/g' 2>/dev/null ||
+  python3 -c "import sys,re; print(re.sub(r',\n(\s*})', r'\n\1', sys.stdin.read()), end='')" 2>/dev/null ||
+  cat
+}
 
 check_commands() {
   local missing=0
@@ -510,6 +516,7 @@ main() {
   local output_file=""
   local text_output_file=""
   local NO_SAVE=""
+  local TEE_PID=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -560,7 +567,7 @@ main() {
   check_commands
 
   # Trap for clean exit
-  trap 'printf "\n${Y}Bye!${N}\n"; exit 0' INT TERM
+  trap '[[ -n "$TEE_PID" ]] && wait "$TEE_PID" 2>/dev/null; printf "\n${Y}Bye!${N}\n"; exit 0' INT TERM
 
   # JSON mode
   if [[ "$JSON_MODE" == "1" ]]; then
@@ -583,6 +590,7 @@ main() {
     local report_path="output/${text_output_file}"
     touch "$report_path"
     exec > >(tee -a "$report_path") 2>&1
+    TEE_PID=$!
     printf "${G}All output saved to:${N} %s\n" "$report_path"
   fi
 
