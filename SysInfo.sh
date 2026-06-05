@@ -315,11 +315,16 @@ _json_temperature_info() {
 }
 
 _json_process_summary() {
-  local data line i=0
+  local data line pid mem cpu cmd i=0
   json_sec_start "top_processes"
-  data=$(ps aux --sort=-%mem 2>/dev/null | head -6 | tail -5)
-  while IFS= read -r line; do
-    json_kv "process_$i" "$(printf "%s" "$line" | tr -s ' ' | cut -d' ' -f11- | xargs)"
+  data=$(ps -eo pid,%mem,%cpu,cmd --sort=-%mem --no-headers 2>/dev/null | head -5)
+  while IFS=' ' read -r pid mem cpu cmd; do
+    json_sec_start "process_$i"
+    json_kv "pid" "$pid"
+    json_kv "memory_percent" "$mem"
+    json_kv "cpu_percent" "$cpu"
+    json_kv "command" "$cmd"
+    json_sec_end
     i=$((i + 1))
   done <<< "$data"
   json_sec_end
@@ -415,7 +420,10 @@ temperature_info() {
 
 process_summary() {
   section "TOP PROCESSES (by memory)"
-  ps aux --sort=-%mem 2>/dev/null | head -6 | sed 's/^/    /'
+  printf "  ${C}%-7s${N} ${C}%-5s${N} ${C}%-5s${N} ${C}%s${N}\n" "PID" "%MEM" "%CPU" "COMMAND"
+  ps -eo pid,%mem,%cpu,cmd --sort=-%mem --no-headers 2>/dev/null | head -5 | while IFS=' ' read -r pid mem cpu cmd; do
+    printf "  ${Y}%-7s${N} ${W}%-5s${N} ${W}%-5s${N} %s\n" "$pid" "$mem" "$cpu" "$cmd"
+  done
 }
 
 system_summary() {
